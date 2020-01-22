@@ -1,0 +1,7 @@
+exportPattern("^[[:alpha:]]+")
+
+importFrom("stats", "cov", "mahalanobis", "residuals", "rnorm", "sd")
+importFrom("vars", "Acoef", "VAR")
+importFrom("pracma", "detrend")
+importFrom("condMVNorm", "condMVN")
+importFrom("data.table", "data.table")

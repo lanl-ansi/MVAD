@@ -1,0 +1,126 @@
+---
+title: "Simple-Usage"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Simple-Usage}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(MVAD)
+```
+
+# How to use MVAD
+Multivariate time-series data can be evaluated by this package to determine if __anomalies__ occur in the data. Furthermore, scoring an anomaly can provide further details to analyze the context of the anomaly providing details regarding __shape__ of the signal surrounding the anomaly. The score associated with an anomaly provides context on the severity of it, while the conditional probabilities conveys which variable(s) contribute to the anomaly. There are simply a few functions to call to begin the procedure. An academic paper that illustrates the power of the techniques used by this package can be found on [arxiv](https://arxiv.org/abs/1911.06316).
+
+## MVAD example workflow
+This library works with multivariate data. The first step is to get some. Here we can call a function to generate some simple data for the purpose of this vignette. To see how to use it for a more detailed case, see the companian PMU-Analyis Vignette. 
+
+```{r get_data}
+dt.data <- get_test_data()
+head(dt.data)
+summary(dt.data)
+dim(dt.data)
+```
+
+So now we have 11 minutes of synthesized data at 30Hz. This is just synthetic time-series data that looks like this: 
+
+```{r plot_data}
+library(ggplot2)
+library(Rmisc)
+p1 <- ggplot(dt.data, aes(x=(1:nrow(dt.data))/1800, y=v1.Y)) +
+  geom_point(shape = ".", colour = "black") +
+  labs(title = "Variable 1") + xlab("time (mins)") + ylab("unit for var1")
+p2 <- ggplot(dt.data, aes(x=(1:nrow(dt.data))/1800, y=v2.Y)) +
+  geom_point(shape = ".", colour = "black") +
+  labs(title = "Variable 2") + xlab("time (mins)") + ylab("unit for var2")
+p3 <- ggplot(dt.data, aes(x=(1:nrow(dt.data))/1800, y=v3.Y)) +
+  geom_point(shape = ".", colour = "black") +
+  labs(title = "Variable 3") + xlab("time (mins)") + ylab("unit for var3")
+p4 <- ggplot(dt.data, aes(x=(1:nrow(dt.data))/1800, y=v4.Y)) +
+  geom_point(shape = ".", colour = "black") +
+  labs(title = "Variable 4") + xlab("time (mins)") + ylab("unit for var4")
+multiplot(p1, p2, p3, p4, cols=2)
+```
+
+Nice pretty data right? Okay notice that there are units for each variable that are different. Also clearly each variable has some trend line and different distributions. Nice data, but not nice to work with. First we split the data we just generated into training and testing. In practice, the most recent data point will be testing and the data preceding it will be the training. For now we will just split the data with a training size of 10 mins and testing of 1 min.
+
+```{r partition_data}
+dt.training_data <- dt.data[1:(1/1.1 * nrow(dt.data)),]
+dt.testing_data <- dt.data[(1/1.1 * nrow(dt.data) + 1): nrow(dt.data),]
+```
+
+To start the anomaly detection process we need to setup the MVAD object. We can set the parameters but this guide wont go into those details, we will use the default. In the default, we use one lag term for our autoregressive model, 1/2 second detection interest, 10 minutes of training time, and the 4 variables of the data we just generated.
+
+```{r setup model}
+dt.ad <- setup_model()
+show(dt.ad)
+```
+
+The next step will be to include our data into the MVAR object. 
+
+```{r add_data}
+dt.ad <- add_data(dt.ad, training_data = dt.training_data, testing_data = dt.testing_data)
+```
+
+Now that the data is added, we need to remove the units, the trend line, and standardize each variable. This is done seporately for each variable. The intermediate states and detrending parameters are also contained in the MVAD object. Lets preprocess the data and take a look:
+
+```{r preprocess_data}
+dt.ad <- preprocess_data(dt.ad)
+#>
+xs <- (1:nrow(dt.ad$normalized_data$standardized_data))/120
+p1 <- ggplot(dt.ad$normalized_data$standardized_data, aes(x=xs, y=v1.Y)) +
+  geom_point(shape = "x", colour = "black") +
+  labs(title = "Variable 1") + xlab("time (mins)")
+p2 <- ggplot(dt.ad$normalized_data$standardized_data, aes(x=xs, y=v2.Y)) +
+  geom_point(shape = "x", colour = "black") +
+  labs(title = "Variable 2") + xlab("time (mins)") 
+p3 <- ggplot(dt.ad$normalized_data$standardized_data, aes(x=xs, y=v3.Y)) +
+  geom_point(shape = "x", colour = "black") +
+  labs(title = "Variable 3") + xlab("time (mins)") 
+p4 <- ggplot(dt.ad$normalized_data$standardized_data, aes(x=xs, y=v4.Y)) +
+  geom_point(shape = "x", colour = "black") +
+  labs(title = "Variable 4") + xlab("time (mins)")
+multiplot(p1, p2, p3, p4, cols=2)
+```
+
+Now that data looks nice. No more units, or trend. We can train the model now.
+
+```{r train_model}
+dt.ad <- train_model(dt.ad)
+show(dt.ad$model)
+```
+
+To score anomalies, we will evaluate the residuals. The residual is the difference of the observed and expected values. In a real situation the testing data is the newest point that came in. For our example we show that this can be done for arbitrary distance forward.
+
+```{r residual_data}
+dt.ad <- get_residual(dt.ad)
+```
+
+The residuals can then be scored using the covariances. Conditional and multivariate scores are reported.
+
+```{r score_data}
+dt.ad <- get_anomaly_score(dt.ad)
+ggplot(dt.ad$scores, aes(x=1:nrow(dt.ad$scores)/30, y=Mahalanobis)) +
+  geom_point(shape = "x", colour = "black") +
+  labs(title = "Multivariate Anomaly Score") + xlab("time (sec)")
+```
+
+Thats it, there are conditional scores for each variable as well. Check out the PMU-Analysis vignette for a practical example of how to use this library. 
+
+
+
+
+
+
+
+
+
