@@ -79,7 +79,7 @@ dt.ad:
 }
 The MVAD object is updatedand appended from the relevant functions.
 
-* \href{https://cran.r-project.org/web/packages/vars/index.html}{VAR model}
+* \href{ https://CRAN.R-project.org/package=vars}{VAR model}
 }
 
 \author{
